@@ -1,4 +1,4 @@
-package cache.distributed.redis
+package bambuo_spire_redis_cache
 
 import soulsoft_extensions_caching.*
 import std.time.*

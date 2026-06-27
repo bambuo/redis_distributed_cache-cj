@@ -1,8 +1,8 @@
-package cache
+package bambuo_spire_redis_cache
 
 import std.time.*
-import cache.distributed.redis.*
 import soulsoft_extensions_caching.*
+import soulsoft_extensions_options.*
 
 main() {
     println("╔══════════════════════════════════════════╗")

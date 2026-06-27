@@ -1,4 +1,4 @@
-package cache.distributed.redis
+package bambuo_spire_redis_cache
 
 import redis.client.*
 import soulsoft_extensions_caching.*
