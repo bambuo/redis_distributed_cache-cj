@@ -28,7 +28,12 @@ internal func resolveExpiry(options: DistributedCacheEntryOptions): (Option<Int6
     }
 
     if (let Some(abs) <- options.absoluteExpiration) {
-        exAt = Some(epochSeconds(abs))
+        let totalMs = epochMilliseconds(abs)
+        if (totalMs % 1000 == 0) {
+            exAt = Some(totalMs / 1000)
+        } else {
+            pxAt = Some(totalMs)
+        }
     }
 
     if (let Some(sliding) <- options.slidingExpiration) {
@@ -52,10 +57,15 @@ internal func durationToSecs(d: Duration): Int64 {
     else { (ms + 999) / 1000 }
 }
 
+/// 将 DateTime 转为 Unix 毫秒级时间戳
+internal func epochMilliseconds(dt: DateTime): Int64 {
+    let diff = dt - DateTime.UnixEpoch
+    diff.toMilliseconds()
+}
+
 /// 将 DateTime 转为 Unix 秒级时间戳
 internal func epochSeconds(dt: DateTime): Int64 {
-    let diff = dt - DateTime.UnixEpoch
-    let totalMs = diff.toMilliseconds()
+    let totalMs = epochMilliseconds(dt)
     totalMs / 1000
 }
 

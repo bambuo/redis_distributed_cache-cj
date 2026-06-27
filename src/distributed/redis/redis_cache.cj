@@ -88,9 +88,10 @@ public class RedisDistributedCache <: IDistributedCache {
     public func getString(key: String): Option<String> {
         match (client.get(key)) {
             case Some(blob) =>
-                renewSlidingIfNeeded(key)
                 try {
-                    Some(blob.toUtf8())
+                    let s = blob.toUtf8()
+                    renewSlidingIfNeeded(key)
+                    Some(s)
                 } catch (_: Exception) {
                     None
                 }

@@ -159,7 +159,7 @@ class ExpiryUtilsTests {
             case Some(v) => @Expect(v, 300)  // sliding 300s
             case None => @Fail("ex 应来自 sliding")
         }
-        @Expect(exAt, None)  // absoluteExpirationRelativeToNow 也进 ex，但被 sliding 覆盖
+        @Expect(isNone(exAt), true)  // absoluteExpirationRelativeToNow 也进 ex，但被 sliding 覆盖
         // 注意：sliding 和 relative 都是 ex，sliding 优先值进入
     }
 
@@ -199,6 +199,33 @@ class ExpiryUtilsTests {
     func resolveExpiryZeroDurationIgnored() {
         let opts = DistributedCacheEntryOptions(
             absoluteExpirationRelativeToNow: Some(Duration.millisecond * 0)
+        )
+        let (ex, px, exAt, pxAt) = resolveExpiry(opts)
+        @Expect(isNone(ex), true)
+        @Expect(isNone(px), true)
+    }
+
+    @TestCase
+    func resolveExpiryAbsoluteWithMs() {
+        // 时间戳带 500ms 偏移 → 应触发 pxAt
+        let dt = DateTime.ofEpoch(second: 2000000000, nanosecond: 500000000)
+        let opts = DistributedCacheEntryOptions(
+            absoluteExpiration: Some(dt)
+        )
+        let (ex, px, exAt, pxAt) = resolveExpiry(opts)
+        @Expect(isNone(ex), true)
+        @Expect(isNone(px), true)
+        @Expect(isNone(exAt), true)
+        match (pxAt) {
+            case Some(v) => @Expect(v, 2000000000500)
+            case None => @Fail("pxAt 应为 Some(2000000000500)")
+        }
+    }
+
+    @TestCase
+    func resolveExpirySlidingZeroIgnored() {
+        let opts = DistributedCacheEntryOptions(
+            slidingExpiration: Some(Duration.millisecond * 0)
         )
         let (ex, px, exAt, pxAt) = resolveExpiry(opts)
         @Expect(isNone(ex), true)
@@ -391,6 +418,84 @@ class RedisCacheIntegrationTests {
         let k = uniqueKey("noexp")
         cache.setString(k, "persistent")
         @Expect((cache.getString(k) ?? "None") != "None", true)
+        cache.remove(k)
+    }
+
+    // ===== 构造函数 =====
+
+    @TestCase
+    func initWithExistingClient() {
+        let innerClient = RedisClient("172.20.10.2", 6379u16)
+        let cache = RedisDistributedCache(innerClient)
+        let k = uniqueKey("initcl")
+        cache.setString(k, "from-existing-client")
+        @Expect((cache.getString(k) ?? "None") != "None", true)
+        cache.remove(k)
+    }
+
+    // ===== 字节数组带过期 + 滑动续期 =====
+
+    @TestCase
+    func setBytesWithSlidingExpiry() {
+        let cache = createCache()
+        let k = uniqueKey("bin-slid")
+        let data: Array<Byte> = [0x01, 0x02, 0x03]
+        cache.set(k, data, DistributedCacheEntryOptions(
+            slidingExpiration: Some(Duration.second * 3)
+        ))
+        // 第一次读取
+        match (cache.get(k)) {
+            case Some(b) => @Expect(b.size, 3)
+            case None => @Fail("首次读取返回 None")
+        }
+        // 等待接近过期再读（应续期）
+        sleep(Duration.second * 2)
+        match (cache.get(k)) {
+            case Some(b) => @Expect(b[0], 0x01u8)
+            case None => @Fail("续期后读取返回 None")
+        }
+        // 再次等待接近过期再读（二次续期）
+        sleep(Duration.second * 2)
+        match (cache.get(k)) {
+            case Some(b) => @Expect(b[2], 0x03u8)
+            case None => @Fail("二次续期后读取返回 None")
+        }
+        // 等足够久到过期
+        sleep(Duration.second * 4)
+        @Expect(isNone(cache.get(k)), true)
+        cache.remove(k)
+    }
+
+    // ===== refresh 无滑动元数据 =====
+
+    @TestCase
+    func refreshKeyWithoutSlidingMeta() {
+        let cache = createCache()
+        let k = uniqueKey("ref-noslid")
+        cache.setString(k, "no-sliding")
+        // refresh 不应抛异常，也不应影响键
+        cache.refresh(k)
+        @Expect((cache.getString(k) ?? "None") != "None", true)
+        cache.remove(k)
+    }
+
+    // ===== getString 非法 UTF-8 =====
+
+    @TestCase
+    func getStringWithInvalidUtf8() {
+        let cache = createCache()
+        let k = uniqueKey("badutf")
+        // 通过 set(bytes) 写入非法 UTF-8 字节
+        let invalidBytes: Array<Byte> = [0xFF, 0xFE, 0x80]
+        cache.set(k, invalidBytes)
+        // getString 内部 toUtf8() 应抛异常 → 返回 None
+        let val = cache.getString(k)
+        @Expect(isNone(val), true)
+        // 验证 bytes 读取仍然正常
+        match (cache.get(k)) {
+            case Some(b) => @Expect(b.size, 3)
+            case None => @Fail("get 应正常读取原始字节")
+        }
         cache.remove(k)
     }
 }
