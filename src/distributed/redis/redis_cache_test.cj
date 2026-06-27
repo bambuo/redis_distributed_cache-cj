@@ -2,6 +2,8 @@ package cache.distributed.redis
 
 import redis.client.*
 import soulsoft_extensions_caching.*
+import soulsoft_extensions_injection.*
+import soulsoft_extensions_options.*
 import std.convert.*
 import std.math.*
 import std.time.*
@@ -496,6 +498,97 @@ class RedisCacheIntegrationTests {
             case Some(b) => @Expect(b.size, 3)
             case None => @Fail("get 应正常读取原始字节")
         }
+        cache.remove(k)
+    }
+}
+
+/// ──────────────────────────────────────────────
+/// 集成测试：ServiceCollection 扩展方法
+/// ──────────────────────────────────────────────
+/// 需要本地 Redis 服务器 127.0.0.1:6379
+/// 每个测试用独立键名前缀避免互相干扰
+
+@Test
+class ServiceCollectionExtensionTests {
+    private var keyCounter: Int64 = 0
+
+    private func uniqueKey(prefix: String): String {
+        keyCounter++
+        "diext:${prefix}_${keyCounter}"
+    }
+
+    // ===== 无参重载 =====
+
+    @TestCase
+    func addWithDefaultOptions() {
+        let services = ServiceCollection()
+        services.addRedisDistributedCache { options =>
+            options.host = "172.20.10.2"
+            options.port = 6379u16
+        }
+        let provider = services.build()
+        let cache = provider.getOrThrow<IDistributedCache>()
+        let k = uniqueKey("default")
+        cache.setString(k, "hello")
+        @Expect((cache.getString(k) ?? "None") != "None", true)
+        cache.remove(k)
+    }
+
+    // ===== 配置回调 =====
+
+    @TestCase
+    func addWithCustomOptions() {
+        let services = ServiceCollection()
+        services.addRedisDistributedCache { options =>
+            options.host = "172.20.10.2"
+            options.port = 6379u16
+        }
+        let provider = services.build()
+        let cache = provider.getOrThrow<IDistributedCache>()
+        let k = uniqueKey("custom")
+        cache.setString(k, "configured")
+        @Expect((cache.getString(k) ?? "None") != "None", true)
+        cache.remove(k)
+    }
+
+    // ===== 单例生命周期 =====
+
+    @TestCase
+    func addSingletonLifetime() {
+        let services = ServiceCollection()
+        services.addRedisDistributedCache { options =>
+            options.host = "172.20.10.2"
+            options.port = 6379u16
+        }
+        let provider = services.build()
+        let cache1 = provider.getOrThrow<IDistributedCache>()
+        let cache2 = provider.getOrThrow<IDistributedCache>()
+        // 验证同一实例操作：cache1 写入的数据 cache2 可读
+        let k = uniqueKey("singleton")
+        cache1.setString(k, "shared-instance")
+        let val = cache2.getString(k)
+        match (val) {
+            case Some(s) => @Expect(s, "shared-instance")
+            case None => @Fail("cache2 应能读到 cache1 写入的数据（同一实例）")
+        }
+        cache2.remove(k)
+    }
+
+    // ===== 链式调用 =====
+
+    @TestCase
+    func addChainableReturnValue() {
+        let services = ServiceCollection()
+        let result = services.addRedisDistributedCache { options =>
+            options.host = "172.20.10.2"
+            options.port = 6379u16
+        }
+        // 返回值应能链式 build
+        let provider = result.build()
+        let cache = provider.getOrThrow<IDistributedCache>()
+        let k = uniqueKey("chain")
+        cache.setString(k, "chained")
+        @Expect((cache.getString(k) ?? "None") != "None", true)
         cache.remove(k)
     }
 }

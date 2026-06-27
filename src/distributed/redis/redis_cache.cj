@@ -2,6 +2,7 @@ package cache.distributed.redis
 
 import redis.client.*
 import soulsoft_extensions_caching.*
+import soulsoft_extensions_options.*
 import std.collection.*
 import std.convert.*
 import std.time.*
@@ -54,6 +55,16 @@ public class RedisDistributedCache <: IDistributedCache {
     /// @param port Redis 服务器端口
     public init(host: String, port: UInt16) {
         this.client = RedisClient(host, port)
+    }
+
+    /// 通过选项模式创建缓存（用于依赖注入）
+    ///
+    /// 从 IOptions<RedisDistributedCacheOptions> 读取 host/port 并自动建立 Redis 连接。
+    ///
+    /// @param options Redis 分布式缓存选项
+    public init(options: IOptions<RedisDistributedCacheOptions>) {
+        let opts = options.value
+        this.client = RedisClient(opts.host, opts.port)
     }
 
     // ====================================================================
@@ -164,4 +175,24 @@ public class RedisDistributedCache <: IDistributedCache {
             case None => ()
         }
     }
+}
+
+/// Redis 分布式缓存选项
+///
+/// 用于配置 Redis 连接参数，通过选项模式注入到 [RedisDistributedCache] 中。
+/// 所有字段均有合理默认值，调用方可按需覆盖。
+///
+/// # 示例
+/// ```cangjie
+/// let services = ServiceCollection()
+/// services.addRedisDistributedCache { options =>
+///     options.host = "127.0.0.1"
+///     options.port = 6379u16
+/// }
+/// ```
+public class RedisDistributedCacheOptions {
+    /// Redis 服务器主机地址，默认 127.0.0.1
+    public var host: String = "127.0.0.1"
+    /// Redis 服务器端口，默认 6379
+    public var port: UInt16 = 6379u16
 }
