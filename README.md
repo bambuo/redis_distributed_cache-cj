@@ -1,4 +1,4 @@
-# bambuo_spire_redis_cache — Bambuo 出品 Spire 框架 Redis 分布式缓存
+# bambuo_spire_redis_cache — Spire 框架 Redis 分布式缓存
 
 [![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Cangjie](https://img.shields.io/badge/language-Cangjie%201.1.3-orange)](https://cangjie-lang.cn)
