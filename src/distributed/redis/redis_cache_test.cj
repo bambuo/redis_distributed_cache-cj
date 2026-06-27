@@ -2,6 +2,8 @@ package cache.distributed.redis
 
 import redis.client.*
 import soulsoft_extensions_caching.*
+import std.convert.*
+import std.math.*
 import std.time.*
 
 /// ──────────────────────────────────────────────
@@ -58,14 +60,14 @@ class ExpiryUtilsTests {
 
     @TestCase
     func epochSecondsZero() {
-        let dt = DateTime.fromEpochSecond(0)
+        let dt = DateTime.ofEpoch(second: 0, nanosecond: 0)
         @Expect(epochSeconds(dt), 0)
     }
 
     @TestCase
     func epochSecondsKnownTs() {
         // 2024-01-01 00:00:00 UTC = 1704067200
-        let dt = DateTime.fromEpochSecond(1704067200)
+        let dt = DateTime.ofEpoch(second: 1704067200, nanosecond: 0)
         @Expect(epochSeconds(dt), 1704067200)
     }
 
@@ -75,7 +77,7 @@ class ExpiryUtilsTests {
         let ts = epochSeconds(now)
         // 应该接近当前时间，误差不超过5秒
         let nowTs = epochSeconds(DateTime.nowUTC())
-        @Expect((ts - nowTs).abs() <= 1, true)
+        @Expect(abs(ts - nowTs) <= 1, true)
     }
 
     // ===== resolveExpiry =====
@@ -84,10 +86,10 @@ class ExpiryUtilsTests {
     func resolveExpiryNone() {
         let opts = DistributedCacheEntryOptions()
         let (ex, px, exAt, pxAt) = resolveExpiry(opts)
-        @Expect(ex, None)
-        @Expect(px, None)
-        @Expect(exAt, None)
-        @Expect(pxAt, None)
+        @Expect(isNone(ex), true)
+        @Expect(isNone(px), true)
+        @Expect(isNone(exAt), true)
+        @Expect(isNone(pxAt), true)
     }
 
     @TestCase
@@ -100,8 +102,8 @@ class ExpiryUtilsTests {
             case Some(v) => @Expect(v, 30)
             case None => @Fail("ex 应为 Some(30)")
         }
-        @Expect(px, None)
-        @Expect(exAt, None)
+        @Expect(isNone(px), true)
+        @Expect(isNone(exAt), true)
     }
 
     @TestCase
@@ -110,7 +112,7 @@ class ExpiryUtilsTests {
             absoluteExpirationRelativeToNow: Some(Duration.millisecond * 1500)
         )
         let (ex, px, exAt, pxAt) = resolveExpiry(opts)
-        @Expect(ex, None)
+        @Expect(isNone(ex), true)
         match (px) {
             case Some(v) => @Expect(v, 1500)
             case None => @Fail("px 应为 Some(1500)")
@@ -119,13 +121,13 @@ class ExpiryUtilsTests {
 
     @TestCase
     func resolveExpiryAbsolute() {
-        let dt = DateTime.fromEpochSecond(2000000000)
+        let dt = DateTime.ofEpoch(second: 2000000000, nanosecond: 0)
         let opts = DistributedCacheEntryOptions(
             absoluteExpiration: Some(dt)
         )
         let (ex, px, exAt, pxAt) = resolveExpiry(opts)
-        @Expect(ex, None)
-        @Expect(px, None)
+        @Expect(isNone(ex), true)
+        @Expect(isNone(px), true)
         match (exAt) {
             case Some(v) => @Expect(v, 2000000000)
             case None => @Fail("exAt 应为 Some(2000000000)")
@@ -142,12 +144,12 @@ class ExpiryUtilsTests {
             case Some(v) => @Expect(v, 600)
             case None => @Fail("ex 应为 Some(600)")
         }
-        @Expect(exAt, None)
+        @Expect(isNone(exAt), true)
     }
 
     @TestCase
     func resolveExpiryCombinedSlidingAndAbsolute() {
-        let dt = DateTime.fromEpochSecond(3000000000)
+        let dt = DateTime.ofEpoch(second: 3000000000, nanosecond: 0)
         let opts = DistributedCacheEntryOptions(
             slidingExpiration: Some(Duration.second * 300),
             absoluteExpirationRelativeToNow: Some(Duration.hour)
@@ -167,7 +169,7 @@ class ExpiryUtilsTests {
             slidingExpiration: Some(Duration.millisecond * 500)
         )
         let (ex, px, exAt, pxAt) = resolveExpiry(opts)
-        @Expect(ex, None)
+        @Expect(isNone(ex), true)
         match (px) {
             case Some(v) => @Expect(v, 500)
             case None => @Fail("px 应为 Some(500)")
@@ -176,7 +178,7 @@ class ExpiryUtilsTests {
 
     @TestCase
     func resolveExpiryAllThree() {
-        let dt = DateTime.fromEpochSecond(4000000000)
+        let dt = DateTime.ofEpoch(second: 4000000000, nanosecond: 0)
         let opts = DistributedCacheEntryOptions(
             slidingExpiration: Some(Duration.second * 60),
             absoluteExpiration: Some(dt),
@@ -199,8 +201,8 @@ class ExpiryUtilsTests {
             absoluteExpirationRelativeToNow: Some(Duration.millisecond * 0)
         )
         let (ex, px, exAt, pxAt) = resolveExpiry(opts)
-        @Expect(ex, None)
-        @Expect(px, None)
+        @Expect(isNone(ex), true)
+        @Expect(isNone(px), true)
     }
 }
 
@@ -215,7 +217,7 @@ class RedisCacheIntegrationTests {
     private var keyCounter: Int64 = 0
 
     private func createCache(): RedisDistributedCache {
-        RedisDistributedCache("127.0.0.1", 6379u16)
+        RedisDistributedCache("172.20.10.2", 6379u16)
     }
 
     private func uniqueKey(prefix: String): String {
@@ -242,7 +244,7 @@ class RedisCacheIntegrationTests {
     func getStringNonexistent() {
         let cache = createCache()
         let val = cache.getString("nonexistent_${keyCounter++}")
-        @Expect(val, None)
+        @Expect(isNone(val), true)
     }
 
     @TestCase
@@ -284,7 +286,7 @@ class RedisCacheIntegrationTests {
     func getNonexistentBytes() {
         let cache = createCache()
         let val = cache.get("nonexistent_bin_${keyCounter++}")
-        @Expect(val, None)
+        @Expect(isNone(val), true)
     }
 
     // ===== 删除 =====
@@ -294,9 +296,9 @@ class RedisCacheIntegrationTests {
         let cache = createCache()
         let k = uniqueKey("rm")
         cache.setString(k, "to-delete")
-        @Expect(cache.getString(k) ?? "None" != "None", true)
+        @Expect((cache.getString(k) ?? "None") != "None", true)
         cache.remove(k)
-        @Expect(cache.getString(k), None)
+        @Expect(isNone(cache.getString(k)), true)
     }
 
     @TestCase
@@ -320,10 +322,10 @@ class RedisCacheIntegrationTests {
             )
         )
         // 立即存在
-        @Expect(cache.getString(k) ?? "None" != "None", true)
+        @Expect((cache.getString(k) ?? "None") != "None", true)
         // 等过期
         sleep(Duration.second * 3)
-        @Expect(cache.getString(k), None)
+        @Expect(isNone(cache.getString(k)), true)
     }
 
     // ===== 滑动过期 =====
@@ -340,16 +342,16 @@ class RedisCacheIntegrationTests {
             )
         )
         // 第一次读取 - 存在
-        @Expect(cache.getString(k) ?? "None" != "None", true)
+        @Expect((cache.getString(k) ?? "None") != "None", true)
         // 等待接近过期边界再读（续期）
         sleep(Duration.second * 2)
-        @Expect(cache.getString(k) ?? "None" != "None", true)
+        @Expect((cache.getString(k) ?? "None") != "None", true)
         // 再次等待接近过期边界再读（续期）
         sleep(Duration.second * 2)
-        @Expect(cache.getString(k) ?? "None" != "None", true)
+        @Expect((cache.getString(k) ?? "None") != "None", true)
         // 等足够久到过期
         sleep(Duration.second * 4)
-        @Expect(cache.getString(k), None)
+        @Expect(isNone(cache.getString(k)), true)
     }
 
     // ===== refresh =====
@@ -370,7 +372,7 @@ class RedisCacheIntegrationTests {
         cache.refresh(k)
         // 如果没续期，再过 2 秒就过期了；续期后还能读到
         sleep(Duration.second * 2)
-        @Expect(cache.getString(k) ?? "None" != "None", true)
+        @Expect((cache.getString(k) ?? "None") != "None", true)
         cache.remove(k)
     }
 
@@ -388,15 +390,15 @@ class RedisCacheIntegrationTests {
         let cache = createCache()
         let k = uniqueKey("noexp")
         cache.setString(k, "persistent")
-        @Expect(cache.getString(k) ?? "None" != "None", true)
+        @Expect((cache.getString(k) ?? "None") != "None", true)
         cache.remove(k)
     }
 }
 
-/// 测试用睡眠辅助
-private func sleep(d: Duration): Unit {
-    let ms = d.toMilliseconds()
-    if (ms > 0) {
-        std.time.sleep(Duration(unit: DurationUnit.MILLISECOND, value: ms))
+/// 辅助函数：检查 Option 是否为 None
+private func isNone<T>(v: Option<T>): Bool {
+    match (v) {
+        case None => true
+        case _ => false
     }
 }

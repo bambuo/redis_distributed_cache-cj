@@ -54,8 +54,7 @@ internal func durationToSecs(d: Duration): Int64 {
 
 /// 将 DateTime 转为 Unix 秒级时间戳
 internal func epochSeconds(dt: DateTime): Int64 {
-    let epoch = DateTime.fromEpochSecond(0)
-    let diff = epoch.durationUntil(dt)
+    let diff = dt - DateTime.UnixEpoch
     let totalMs = diff.toMilliseconds()
     totalMs / 1000
 }

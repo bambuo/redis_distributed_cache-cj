@@ -3,6 +3,7 @@ package cache.distributed.redis
 import redis.client.*
 import soulsoft_extensions_caching.*
 import std.collection.*
+import std.convert.*
 import std.time.*
 
 /// Redis 分布式缓存实现
@@ -60,9 +61,12 @@ public class RedisDistributedCache <: IDistributedCache {
     // ====================================================================
 
     /// 读取字节数组。键不存在或已过期返回 None。
+    /// 如果键使用了滑动过期策略，读取时会自动续期。
     public func get(key: String): Option<Array<Byte>> {
         match (client.get(key)) {
-            case Some(blob) => Some(blob.toBytes())
+            case Some(blob) =>
+                renewSlidingIfNeeded(key)
+                Some(blob.toBytes())
             case None => None
         }
     }
@@ -80,9 +84,11 @@ public class RedisDistributedCache <: IDistributedCache {
     }
 
     /// 读取字符串。键不存在或已过期返回 None。
+    /// 如果键使用了滑动过期策略，读取时会自动续期。
     public func getString(key: String): Option<String> {
         match (client.get(key)) {
             case Some(blob) =>
+                renewSlidingIfNeeded(key)
                 try {
                     Some(blob.toUtf8())
                 } catch (_: Exception) {
@@ -140,6 +146,21 @@ public class RedisDistributedCache <: IDistributedCache {
             let ttlSec = durationToSecs(sliding)
             client.set(ttlKey, Blob.fromUtf8("${ttlSec}"))
             client.expire(ttlKey, ttlSec)
+        }
+    }
+
+    /// 如果键有滑动过期元数据，续期
+    private func renewSlidingIfNeeded(key: String): Unit {
+        let ttlKey = slidingTtlKey(key)
+        match (client.get(ttlKey)) {
+            case Some(meta) =>
+                let ttlStr = meta.toUtf8()
+                if (ttlStr.size > 0) {
+                    let ttl = Int64.parse(ttlStr)
+                    client.expire(key, ttl)
+                    client.expire(ttlKey, ttl)
+                }
+            case None => ()
         }
     }
 }
