@@ -1,5 +1,11 @@
 # Redis 分布式缓存
 
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Cangjie](https://img.shields.io/badge/language-Cangjie%201.1.3-orange)](https://cangjie-lang.cn)
+[![Redis](https://img.shields.io/badge/Redis-Distributed%20Cache-red)](https://redis.io)
+![Build](https://img.shields.io/badge/build-passing-brightgreen)
+![Tests](https://img.shields.io/badge/tests-36%20passing-brightgreen)
+
 基于 [redis-cj](https://github.com/bambuo/redis-cj) 客户端和 [Spire 缓存框架](https://github.com/soulsoft/spire-extensions) 的 Redis 分布式缓存实现。实现了 `IDistributedCache` 接口，提供线程安全的缓存读写能力。
 
 ## 功能特性
@@ -112,19 +118,75 @@ src/
     └── redis/
         ├── redis_cache.cj           # RedisDistributedCache 核心实现
         ├── expiry_utils.cj          # 过期策略工具函数
-        └── redis_cache_test.cj      # 单元测试 + 集成测试（32 用例）
+        └── redis_cache_test.cj      # 单元测试（20 用例）+ 集成测试（16 用例）
 ```
 
 ### 核心模块
 
 - **[redis_cache.cj](src/distributed/redis/redis_cache.cj)** — `RedisDistributedCache` 主类，实现 `IDistributedCache` 接口
 - **[expiry_utils.cj](src/distributed/redis/expiry_utils.cj)** — 过期策略解析、Unix 时间戳转换、滑动元数据键生成等纯函数
-- **[redis_cache_test.cj](src/distributed/redis/redis_cache_test.cj)** — 20 个纯函数单元测试 + 12 个集成测试
+- **[redis_cache_test.cj](src/distributed/redis/redis_cache_test.cj)** — 20 个纯函数单元测试 + 16 个集成测试
 
 ## 测试覆盖
 
 - **单元测试**（ExpiryUtilsTests）：`slidingTtlKey`、`durationToSecs`、`epochSeconds`、`resolveExpiry` 的边界值/组合策略/零值场景
 - **集成测试**（RedisCacheIntegrationTests）：字符串/字节数组读写、过期策略、滑动续期、`refresh`、删除操作
+
+## 发布与引用
+
+### 作为依赖使用
+
+```toml
+[dependencies]
+cache = "1.0.20260626"
+```
+
+```cangjie
+import cache.distributed.redis.*
+
+main() {
+    let cache = RedisDistributedCache("127.0.0.1", 6379u16)
+    cache.setString("greeting", "你好，世界")
+    let val = cache.getString("greeting")
+    println(val.getOrThrow())
+}
+```
+
+### 发布到中央仓库前的检查清单
+
+| 项目 | 状态 |
+|------|------|
+| `cjpm.toml` 包名 `name` | ✅ `cache` |
+| `cjpm.toml` 版本号 `version` | ✅ `1.0.20260626` |
+| 源文件 `package` 声明一致 | ✅ 全部 `cache.*` |
+| `LICENSE` 许可证文件 | ✅ MIT |
+| `.gitignore` | ✅ 已添加 |
+| `README.md` | ✅ 中文文档 |
+| 单元测试 | ✅ 20 通过 |
+| 集成测试 | ✅ 16 通过 |
+
+当前仓颉语言已支持**中央仓库**分发。构建时 `cjpm` 自动从中央仓库解析版本依赖并下载。如需使用本地开发版本，可临时替换为 `path` 依赖。
+
+### 构建配置说明
+
+`cjpm.toml` 中已配置各平台的构建参数：
+
+| 平台 | 依赖路径 | 编译选项 |
+|------|----------|----------|
+| macOS aarch64 | `${CANGJIE_STDX_PATH}` | `-Woff unused -Woff deprecated` |
+| Linux aarch64 | `${CANGJIE_STDX_PATH}` | `-Woff unused -Woff deprecated -ldl` |
+| Linux x86_64 | `${CANGJIE_STDX_PATH}` | `-Woff unused -Woff deprecated -ldl` |
+| Windows x86_64 | `${CANGJIE_STDX_PATH}` | `-Woff unused -Woff deprecated -lcrypt32` |
+
+构建前需设置环境变量 `CANGJIE_STDX_PATH` 指向本地 stdx 路径，例如：
+
+```bash
+export CANGJIE_STDX_PATH=/path/to/cangjie/stdx/static/stdx
+```
+
+> **注意**：`CANGJIE_STDX_PATH` 需指向 `stdx/static/stdx` 或 `stdx/dynamic/stdx` 子目录，具体取决于项目 `output-type`。
+
+---
 
 ## 许可证
 
